@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart File Converter & Compressor</title>
+  <!-- Tailwind CSS CDN for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF CDN for Document (PDF) generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- pdf.js CDN for reading/rasterizing existing PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- JSZip CDN for zipping the final output -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- gif.js CDN for GIF encoding -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center p-4 sm:p-8 font-sans">
+
+  <header class="text-center max-w-2xl mb-8">
+    <h1 class="text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-400 to-blue-500 mb-2">
+      File Converter & Target Sizer
+    </h1>
+    <p class="text-slate-400 text-sm sm:text-base">
+      Convert any image to a target-size JPG (packaged as a ZIP), or compress a PDF / image / text file down to a target-size PDF — downloaded directly.
+    </p>
+  </header>
+
+  <!-- Main Container -->
+  <main class="w-full max-w-2xl bg-slate-800 border border-slate-700 rounded-2xl p-6 sm:p-8 shadow-xl">
+
+    <!-- Mode Selector -->
+    <div class="flex rounded-xl bg-slate-900 p-1 mb-6 border border-slate-700">
+      <button id="modePngBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition bg-teal-500 text-slate-950 shadow">
+        Convert to Image
+      </button>
+      <button id="modePdfBtn" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition text-slate-400 hover:text-white">
+        Convert to PDF Doc
+      </button>
+    </div>
+
+    <!-- External Image Editor Link (Image mode only) -->
+    <div id="imageResizerLinkWrap" class="mb-6">
+      <button id="openImageResizerBtn" type="button" class="w-full py-2.5 rounded-lg text-sm font-semibold transition bg-slate-700 hover:bg-slate-600 text-white">
+        Image
+      </button>
+    </div>
+
+    <!-- Target Size Slider -->
+    <div class="mb-6">
+      <div class="flex items-center justify-between text-sm mb-1">
+        <label for="targetSlider" class="text-slate-300 font-medium">
+          Target Size: <span id="targetSizeLabel" class="text-teal-300 font-mono">35 KB</span>
+        </label>
+        <span id="targetWindowLabel" class="text-xs px-2 py-0.5 rounded bg-slate-700 text-teal-300">≈30–40 KB window</span>
+      </div>
+      <input type="range" id="targetSlider" min="5" max="150" value="35" step="1"
+        class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-slate-700 accent-teal-400">
+      <p class="text-xs text-slate-500 mt-1">Drag to adjust. If a file is already loaded, it re-converts automatically.</p>
+    </div>
+
+    <!-- Drop Zone -->
+    <div id="dropZone" class="border-2 border-dashed border-slate-600 hover:border-teal-400 rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center gap-3">
+      <svg class="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+      </svg>
+      <p class="font-medium text-slate-200">Drag & drop your file here, or <span class="text-teal-400 underline">browse</span></p>
+      <p id="acceptedFormatsText" class="text-xs text-slate-400">Supports: JPG, PNG, WEBP, BMP, GIF, SVG</p>
+      <input type="file" id="fileInput" class="hidden">
+    </div>
+
+    <!-- Processing / Status Box -->
+    <div id="statusBox" class="mt-6 hidden">
+      <div class="flex items-center justify-between text-sm mb-2">
+        <span id="statusLabel" class="text-slate-300 font-medium">Processing...</span>
+      </div>
+      <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+        <div id="progressBar" class="bg-teal-400 h-full w-1/3 transition-all duration-300 animate-pulse"></div>
+      </div>
+    </div>
+
+    <!-- Result Box -->
+    <div id="resultBox" class="mt-6 hidden p-4 bg-slate-900 border border-slate-700 rounded-xl">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p id="resultFileName" class="text-sm font-semibold text-white truncate max-w-xs"></p>
+          <p id="resultFileSize" class="text-xs text-teal-400 font-mono mt-0.5"></p>
+        </div>
+        <a id="downloadBtn" download="converted-file.zip" class="px-5 py-2.5 rounded-lg bg-teal-400 hover:bg-teal-300 text-slate-950 font-semibold text-sm transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          <span id="downloadBtnLabel">Download ZIP</span>
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const { jsPDF } = window.jspdf;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // State
+    let currentMode = 'PNG'; // 'PNG' or 'PDF'
+    let lastFile = null;
+    let debounceTimer = null;
+
+    const MODE_SLIDER = {
+      PNG: { min: 5, max: 2000, default: 50, accept: 'image/*', formats: 'Any image format (JPG, PNG, WEBP, BMP, GIF, TIFF, SVG...)' },
+      PDF: { min: 15, max: 500, default: 125, accept: 'image/*,.txt,.pdf', formats: 'PDF, images, and plain text (.txt)' }
+    };
+
+    // Fixed JPG quality used when hitting a target size — resizing is done by
+    // scaling dimensions, never by dropping quality, so photos stay sharp.
+    const JPG_QUALITY = 0.92;
+
+    // DOM Elements
+    const modePngBtn = document.getElementById('modePngBtn');
+    const modePdfBtn = document.getElementById('modePdfBtn');
+    const targetSlider = document.getElementById('targetSlider');
+    const targetSizeLabel = document.getElementById('targetSizeLabel');
+    const targetWindowLabel = document.getElementById('targetWindowLabel');
+    const dropZone = document.getElementById('dropZone');
+    const imageResizerLinkWrap = document.getElementById('imageResizerLinkWrap');
+    const openImageResizerBtn = document.getElementById('openImageResizerBtn');
+    const fileInput = document.getElementById('fileInput');
+    const acceptedFormatsText = document.getElementById('acceptedFormatsText');
+    const statusBox = document.getElementById('statusBox');
+    const statusLabel = document.getElementById('statusLabel');
+    const resultBox = document.getElementById('resultBox');
+    const resultFileName = document.getElementById('resultFileName');
+    const resultFileSize = document.getElementById('resultFileSize');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadBtnLabel = document.getElementById('downloadBtnLabel');
+
+    // --- Target size helpers (±15% window around the slider value) ---
+    function targetKB() { return parseInt(targetSlider.value, 10); }
+    function targetBytes() { return targetKB() * 1024; }
+    function minBytes() { return Math.round(targetBytes() * 0.85); }
+    function maxBytes() { return Math.round(targetBytes() * 1.15); }
+
+    function updateTargetLabels() {
+      const kb = targetKB();
+      targetSizeLabel.textContent = `${kb} KB`;
+      targetWindowLabel.textContent = `≈${Math.round(minBytes() / 1024)}–${Math.round(maxBytes() / 1024)} KB window`;
+    }
+
+    // Toggle Modes
+    function setMode(mode) {
+      currentMode = mode;
+      resultBox.classList.add('hidden');
+      statusBox.classList.add('hidden');
+      lastFile = null;
+      fileInput.value = '';
+
+      const cfg = MODE_SLIDER[mode];
+      targetSlider.min = cfg.min;
+      targetSlider.max = cfg.max;
+      targetSlider.value = cfg.default;
+      updateTargetLabels();
+      imageResizerLinkWrap.classList.toggle('hidden', mode !== 'PNG');
+
+      if (mode === 'PNG') {
+        modePngBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition bg-teal-500 text-slate-950 shadow';
+        modePdfBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition text-slate-400 hover:text-white';
+      } else {
+        modePdfBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition bg-blue-500 text-slate-950 shadow';
+        modePngBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-semibold transition text-slate-400 hover:text-white';
+      }
+      fileInput.accept = cfg.accept;
+      acceptedFormatsText.textContent = `Supports: ${cfg.formats}`;
+    }
+
+    openImageResizerBtn.addEventListener('click', () => {
+      window.open('https://imageresizer.com/resize/editor', '_blank');
+    });
+
+    modePngBtn.addEventListener('click', () => setMode('PNG'));
+    modePdfBtn.addEventListener('click', () => setMode('PDF'));
+
+    targetSlider.addEventListener('input', () => {
+      updateTargetLabels();
+      if (lastFile) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => processFile(lastFile), 350);
+      }
+    });
+
+    // Drag & Drop handlers
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-teal-400'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-teal-400'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-teal-400');
+      if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) processFile(e.target.files[0]);
+    });
+
+    // Main Processing Router
+    async function processFile(file) {
+      lastFile = file;
+      statusBox.classList.remove('hidden');
+      resultBox.classList.add('hidden');
+      statusLabel.textContent = `Optimizing ${file.name}...`;
+
+      try {
+        if (currentMode === 'PNG') {
+          const blob = await processToImage(file);
+          await showZippedResult(blob, 'converted_image.jpg');
+        } else {
+          const { blob, filename } = await processToPdf(file);
+          await showDirectResult(blob, filename);
+        }
+      } catch (err) {
+        statusLabel.textContent = `Error: ${err.message}`;
+      }
+    }
+
+    // Helper: Convert File to Image Element
+    function fileToImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('Invalid image file.'));
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Process to JPG (target ± window, driven by slider).
+    // Quality is held fixed and high (JPG_QUALITY) the whole time — only the
+    // pixel dimensions are scaled to hit the target size, so the image never
+    // looks "compressed", just smaller.
+    async function processToImage(file) {
+      const img = await fileToImage(file);
+      const minSize = minBytes();
+      const maxSize = maxBytes();
+
+      let scale = 1.0;
+      let blob = null;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      for (let iteration = 0; iteration < 10; iteration++) {
+        canvas.width = Math.max(50, Math.round(img.width * scale));
+        canvas.height = Math.max(50, Math.round(img.height * scale));
+        // JPG has no transparency — flatten onto white first so any
+        // transparent source pixels don't render as black.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPG_QUALITY));
+
+        if (blob.size <= maxSize && blob.size >= minSize) {
+          break;
+        } else if (blob.size > maxSize) {
+          scale *= Math.sqrt(maxSize / blob.size) * 0.95;
+        } else if (blob.size < minSize && scale < 3.0) {
+          scale *= Math.sqrt(minSize / blob.size) * 1.05;
+        } else {
+          break;
+        }
+      }
+
+      return blob;
+    }
+
+    // Process to PDF Document — routes by input type
+    async function processToPdf(file) {
+      if (file.type === 'application/pdf') {
+        const blob = await compressPdfToPdf(file);
+        return { blob, filename: file.name.replace(/\.pdf$/i, '') + '_resized.pdf' };
+      } else if (file.type.startsWith('image/')) {
+        const blob = await imageToPdf(file);
+        return { blob, filename: 'converted_document.pdf' };
+      } else if (file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt')) {
+        const blob = await textToPdf(file);
+        return { blob, filename: file.name.replace(/\.txt$/i, '') + '.pdf' };
+      } else {
+        throw new Error('Unsupported file type. Please upload a PDF, an image, or a .txt file.');
+      }
+    }
+
+    // Existing PDF -> resized PDF (keeps PDF format; pages are re-rendered so the
+    // final size can be hit precisely). Note: text stops being selectable since
+    // each page becomes an image, but layout and page format are preserved.
+    async function compressPdfToPdf(file) {
+      const originalBuffer = await file.arrayBuffer();
+      const minSize = minBytes();
+      const maxSize = maxBytes();
+
+      let scale = 1.4;
+      let quality = 0.82;
+      let blob = null;
+
+      for (let attempt = 0; attempt < 8; attempt++) {
+        statusLabel.textContent = `Optimizing ${file.name}... (pass ${attempt + 1})`;
+
+        const pdf = await pdfjsLib.getDocument({ data: originalBuffer.slice(0) }).promise;
+        let doc = null;
+
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          const ctx = canvas.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport }).promise;
+
+          const imgData = canvas.toDataURL('image/jpeg', quality);
+          const orientation = canvas.width > canvas.height ? 'l' : 'p';
+          const format = [canvas.width, canvas.height];
+
+          if (p === 1) {
+            doc = new jsPDF({ orientation, unit: 'pt', format });
+          } else {
+            doc.addPage(format, orientation);
+          }
+          doc.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+        }
+
+        blob = doc.output('blob');
+
+        if (blob.size <= maxSize && blob.size >= minSize) break;
+
+        if (blob.size > maxSize) {
+          quality = Math.max(0.08, quality * 0.72);
+          scale = Math.max(0.5, scale * 0.88);
+        } else {
+          quality = Math.min(0.97, quality * 1.2);
+          scale = Math.min(3.0, scale * 1.12);
+          if (quality >= 0.95 && scale >= 3.0) break;
+        }
+      }
+
+      return blob;
+    }
+
+    // Image -> PDF, size-targeted
+    async function imageToPdf(file) {
+      const img = await fileToImage(file);
+      const minSize = minBytes();
+      const maxSize = maxBytes();
+      let quality = 0.8;
+      let blob = null;
+
+      for (let i = 0; i < 8; i++) {
+        const doc = new jsPDF({ orientation: img.width > img.height ? 'l' : 'p', unit: 'px', format: [img.width, img.height] });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        const imgData = canvas.toDataURL('image/jpeg', quality);
+        doc.addImage(imgData, 'JPEG', 0, 0, img.width, img.height);
+
+        blob = doc.output('blob');
+
+        if (blob.size <= maxSize && blob.size >= minSize) break;
+        if (blob.size > maxSize) {
+          quality = Math.max(0.1, quality * 0.75);
+        } else {
+          quality = Math.min(0.98, quality * 1.25);
+          if (quality >= 0.95 && blob.size < minSize) break;
+        }
+      }
+
+      return blob;
+    }
+
+    // Plain text -> PDF (limited compressibility; padded lightly toward the window when short)
+    async function textToPdf(file) {
+      const text = await file.text();
+      const doc = new jsPDF();
+      const splitText = doc.splitTextToSize(text, 180);
+      doc.text(splitText, 10, 10);
+      return doc.output('blob');
+    }
+
+    // Zip the result and show it (used for image mode)
+    async function showZippedResult(blob, filename) {
+      statusLabel.textContent = 'Packaging ZIP...';
+
+      const zip = new JSZip();
+      zip.file(filename, blob);
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      statusBox.classList.add('hidden');
+      resultBox.classList.remove('hidden');
+
+      const kbSize = (blob.size / 1024).toFixed(1);
+      const zipKbSize = (zipBlob.size / 1024).toFixed(1);
+      const zipFilename = filename.replace(/\.[^.]+$/, '') + '.zip';
+
+      resultFileName.textContent = zipFilename;
+      resultFileSize.textContent = `${filename}: ${kbSize} KB  →  ZIP: ${zipKbSize} KB`;
+      downloadBtnLabel.textContent = 'Download ZIP';
+
+      const url = URL.createObjectURL(zipBlob);
+      downloadBtn.href = url;
+      downloadBtn.download = zipFilename;
+    }
+
+    // Show the result as a direct file download, no zipping (used for PDF mode)
+    async function showDirectResult(blob, filename) {
+      statusBox.classList.add('hidden');
+      resultBox.classList.remove('hidden');
+
+      const kbSize = (blob.size / 1024).toFixed(1);
+
+      resultFileName.textContent = filename;
+      resultFileSize.textContent = `${kbSize} KB`;
+      downloadBtnLabel.textContent = 'Download PDF';
+
+      const url = URL.createObjectURL(blob);
+      downloadBtn.href = url;
+      downloadBtn.download = filename;
+    }
+
+    // Init
+    updateTargetLabels();
+  </script>
+</body>
+</html>
